@@ -1,0 +1,2 @@
+Part_ID,Status,Risk_Score,Impacted_Option,Build_Week,System,Subsystem,email_body
+PART-002,CRITICAL,10,OPT-A,2026-W05,Power,Battery,URGENT: PART-002 production line down. New ETA is Feb 22.

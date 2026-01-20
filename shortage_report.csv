@@ -1,0 +1,4 @@
+Part_ID,Option_Code,System,Subsystem,OH_Inventory,Must_Arrive_By
+PART-001,OPT-A,Chassis,Structure,50,2026-02-10
+PART-002,OPT-A,Power,Battery,0,2026-02-12
+PART-003,OPT-B,Thermal,Cooling,1200,2026-02-15
