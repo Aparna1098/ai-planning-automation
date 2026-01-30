@@ -1,15 +1,14 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="npi_agent_command_center",
-    version="0.1.0",
+    name="npi_control_tower",
+    version="1.0.0",
+    description="Agentic Supply Chain Risk Management System",
+    author="Your Name",
     packages=find_packages(),
     install_requires=[
         "streamlit",
         "pandas",
-        "openai",
-        "st-gsheets-connection",
     ],
-    author="Your Name",
-    description="An AI-driven NPI Command Center for supply chain orchestration.",
+    python_requires=">=3.12",
 )
