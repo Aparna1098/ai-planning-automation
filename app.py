@@ -1,51 +1,76 @@
 import streamlit as st
 import pandas as pd
-import os
-from parser_agent import parse_email
-from auditor_agent import run_audit
-from mitigation_agent import run_mitigation_strategy
+import json
+from constants import RISK_LEDGER_PATH
 
-st.set_page_config(page_title="NPI Command Center", layout="wide")
-st.title("🛡️ NPI Action Control Tower")
+# --- AGENT 1: PARSER ---
+def parser_agent(email_text):
+    # Simulated LLM logic: Extracting data into JSON
+    # In reality, this would be: response = openai_client.chat(...)
+    simulated_json = '{"part_id": "PART-002", "new_eta": "2026-02-28", "status": "delayed"}'
+    data = json.loads(simulated_json)
+    data["raw_text"] = email_text
+    return data
 
-# --- TRIGGER AUDIT ---
-if st.button("🔄 Audit Supply Chain Exceptions"):
-    results = []
-    if os.path.exists('supplier_emails'):
-        for file in os.listdir('supplier_emails'):
-            if file.endswith('.txt'):
-                with open(os.path.join('supplier_emails', file), 'r') as f:
-                    content = f.read()
-                    parsed = parse_email(content)
-                    audit = run_audit(parsed)
-                    if audit:
-                        audit['email_body'] = content
-                        results.append(audit)
-        pd.DataFrame(results).to_csv('risk_ledger.csv', index=False)
-        st.success("Audit complete. Exceptions identified.")
-
-# --- ACTION QUEUE & DROPDOWN ---
-if os.path.exists('risk_ledger.csv'):
-    ledger = pd.read_csv('risk_ledger.csv').sort_values(by="Risk_Score", ascending=False)
-    st.header("🚨 Priority Action Queue")
-    st.dataframe(ledger[['Part_ID', 'Status', 'Impacted_Option', 'Build_Week', 'Subsystem']], use_container_width=True)
-
-    st.divider()
-    # RESTORED: Select specific risk to generate action
-    selected_part = st.selectbox("Select Impacted Part for Mitigation Strategy:", ledger['Part_ID'])
+# --- AGENT 2: AUDITOR ---
+def auditor_agent(parsed_data):
+    shortage_df = pd.read_csv("shortage_report.csv")
+    build_df = pd.read_csv("build_plan.csv")
     
-    if st.button("🤖 Run RAG Mitigation"):
-        # Retrieve the full data row for the selected part
-        row = ledger[ledger['Part_ID'] == selected_part].iloc[0]
+    part_id = parsed_data['part_id']
+    if part_id not in shortage_df['Part_ID'].values: return None
+    
+    part_info = shortage_df[shortage_df['Part_ID'] == part_id].iloc[0]
+    impact_mask = build_df['Option_Code'] == part_info['Option_Code']
+    impacted_build = build_df[impact_mask].iloc[0]
+    
+    inventory = part_info['OH_Inventory']
+    demand = impacted_build['Target_Qty']
+    coverage = inventory / demand if demand > 0 else 1.0
+    
+    return {
+        "Part_ID": part_id,
+        "Status": "CRITICAL" if inventory == 0 else "WARNING",
+        "Risk_Score": round(1.0 - coverage, 2),
+        "Impacted_Option": part_info['Option_Code'],
+        "Build_Week": impacted_build['Build_Week'],
+        "System": part_info['System'],
+        "Subsystem": part_info['Subsystem'],
+        "Inventory_Coverage": f"{round(coverage * 100)}%"
+    }
+
+# --- AGENT 3: MITIGATION ---
+def mitigation_agent(audit_row):
+    kb_df = pd.read_csv("org_knowledge.csv")
+    match = kb_df[kb_df['Subsystem'] == audit_row['Subsystem']]
+    
+    poc = match.iloc[0]['POC'] if not match.empty else "GSM"
+    action = match.iloc[0]['Standard_Protocol'] if not match.empty else "Review vendor status."
+    
+    draft = f"Hi {poc},\n\nDelay detected for {audit_row['Part_ID']}. Impacts {audit_row['Build_Week']}. Protocol: {action}"
+    return {"POC": poc, "Action": action, "Draft": draft}
+
+# --- STREAMLIT UI ---
+st.set_page_config(page_title="NPI Control Tower", layout="wide")
+st.title("🚢 NPI Agentic Control Tower")
+
+email_input = st.text_area("Paste Supplier Email Here:", "Part PART-002 is delayed due to weather.")
+
+if st.button("Run Agentic Audit"):
+    # Step 1: Parse
+    signal = parser_agent(email_input)
+    # Step 2: Audit
+    result = auditor_agent(signal)
+    
+    if result:
+        st.subheader("Relational Audit Result")
+        st.write(pd.DataFrame([result]))
         
-        with st.spinner(f"Consulting Knowledge Base for {selected_part}..."):
-            strategy = run_mitigation_strategy(row)
-        
-        st.subheader(f"Strategy for {selected_part}")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.success(f"**Assigned Owner:** {strategy['POC']}")
-            st.info(f"**Recommended Action:** {strategy['Action']}")
-        with col2:
-            st.warning("**Draft Stakeholder Alert:**")
-            st.text_area("Copy to Clipboard:", strategy['Draft'], height=150)
+        # Step 3: Mitigate
+        plan = mitigation_agent(result)
+        st.subheader("Recommended Mitigation Plan")
+        st.success(f"**Assigned POC:** {plan['POC']}")
+        st.info(f"**Action:** {plan['Action']}")
+        st.text_area("Communication Draft:", plan['Draft'], height=150)
+    else:
+        st.error("Part ID not found in Master Data.")
