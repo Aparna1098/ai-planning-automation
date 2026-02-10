@@ -1,124 +1,115 @@
-# NPI Agentic Control Tower: Automated Exception Management
+# NPI Agentic Control Tower
+### **AI-Driven Supply Chain Risk Assessment & Mitigation**
 
-## Product Vision
-The **NPI Agentic Control Tower** is a decision-support system designed to eliminate the manual bottleneck of reconciling unstructured supplier communication with complex production schedules. By deploying a multi-agent orchestration layer, the platform transforms reactive "firefighting" into proactive, data-driven mitigation.
-
----
-
-## The Problem: The "Visibility Gap"
-In high-velocity New Product Introduction (NPI) environments, critical supply signals are often trapped in unstructured email threads. Traditional ERP systems fail to reconcile these signals against live build plans in real-time, leading to:
-* **Information Asymmetry**: Planners lack immediate visibility into how a 48-hour part delay impacts specific vehicle configurations.
-* **High Latency**: Manual cross-referencing between shortage reports and build plans delays the escalation process by hours or days.
+The **NPI Agentic Control Tower** is a specialized decision-support tool designed for Material Planners and Technical Program Managers (TPMs) in the automotive industry. It bridges the gap between **unstructured supplier communication** and **structured ERP ground truth** by utilizing a multi-agent pipeline to predict line stoppages before they happen.
 
 ---
 
-## The Solution: Agentic Orchestration
-Our solution utilizes three specialized agents to automate the risk-to-resolution lifecycle.
-
-### 1. Signal Ingestion (Parser Agent)
-* **Objective**: Digitize unstructured supplier updates into actionable data.
-* **Logic**: Uses NLP to extract Part IDs, updated ETAs, and root causes from raw text, ensuring the system remains grounded in "Ground Truth" signals.
-
-### 2. Relational Impact Analysis (Auditor Agent)
-* **Objective**: Calculate the "Blast Radius" of a supply disruption.
-* **Logic**: Performs a **Relational Audit** using Pandas to join part shortages with vehicle **Option Codes** and **Build Weeks**.
-* **KPI**: Automatically prioritizes the **Action Queue** based on a dynamic Risk Score (Delay Duration / Inventory Buffer).
-
-### 3. Automated Mitigation (Mitigation Agent)
-* **Objective**: Standardize and accelerate the escalation process.
-* **Logic**: Utilizes a **RAG-lite** framework to query Markdown-based organizational playbooks. It identifies the correct technical owner and drafts a tailored recovery plan.
+## The Mission
+In high-stakes New Product Introduction (NPI) environments, a single delayed email can lead to a multi-million dollar line stoppage. This project automates the extraction, auditing, and escalation of supply chain risks, ensuring that "Actionable Intelligence" reaches the right stakeholder instantly—a workflow inspired by real-world NPI Materials Program Management.
 
 ---
 
-## System Architecture
+## Core Agentic Architecture
+The system utilizes a **Decoupled Agentic Pipeline** to ensure accuracy and reliability. This architecture was developed as part of the "Email Agent Assist" portfolio project in February 2026:
+
+
+
+| Agent | Responsibility | Logic Type |
+| :--- | :--- | :--- |
+| **Parser Agent** | Extracts Part IDs, ETAs, and Quantities from raw text. | Generative (Gemini 2.0) |
+| **Auditor Agent** | Calculates Burn Rates, Runout Dates, and Arrival Buffers. | Deterministic (Python/Pandas) |
+| **Mitigation Agent** | Routes risks to specific POCs (TPM, GSM, or Quality). | Heuristic-Based Routing |
+| **Drafting Agent** | Synthesizes technical risk data into professional escalations. | Generative (Context-Aware) |
+
+### 🛰️ System Architecture
 
 ```mermaid
 graph TD
-    A[Unstructured Supplier Email] -->|Ingestion| B(Parser Agent)
-    B -->|Structured JSON| C(Auditor Agent)
-    
-    subgraph "Relational Data Layer"
-    D[(Shortage Report)]
-    E[(Build Plan)]
-    end
-    
-    C <--> D
-    C <--> E
-    
-    C -->|Impacted Option Codes| F{Exception Queue}
-    F -->|Prioritized Selection| G(Mitigation Agent)
-    
-    subgraph "Knowledge Layer"
-    H[.md Response Playbooks]
-    I[.md Stakeholder Directory]
-    end
-    
-    G <--> H
-    G <--> I
-    
-    G -->|Outcome| J[Stakeholder Alert & Recovery Strategy]
+    %% Input Layer
+    Start([Supplier Email Input]) --> Parser{Parser Agent}
 
+    %% Parser Logic
+    subgraph AI_Inference_Layer [AI Inference & Extraction]
+        Parser -- Success --> Extracted[Extracted Data: ID, ETA, Qty]
+        Parser -- 429 Error --> Fallback[Regex/Deterministic Fallback]
+    end
+
+    Extracted --> Auditor
+    Fallback --> Auditor
+
+    %% Auditor Logic
+    subgraph Deterministic_Math_Layer [Risk Audit Engine]
+        Auditor[Auditor Agent] --> DB1[(Shortage Report CSV)]
+        Auditor --> DB2[(Build Plan CSV)]
+        DB1 & DB2 --> Math[Calculate Burn Rate & Runout Date]
+        Math --> Logic[Intersection: ETA vs. Runout]
+    end
+
+    Logic --> Status{Status: On Track / Warning / Critical}
+
+    %% Mitigation Logic
+    subgraph Escalation_Layer [Contextual Routing]
+        Status --> Mitigation[Mitigation Agent]
+        Mitigation --> DB3[(Org Knowledge CSV)]
+        Mitigation -- Keyword Analysis --> Routing[Assign Role: TPM, GSM, or Quality]
+        Routing --> Drafter[Drafting Agent]
+        Drafter -- Generative AI --> Email[AI-Generated Escalation Draft]
+    end
+
+    %% Final Output
+    Email --> UI([Streamlit Dashboard Display])
+    Status --> UI
 ```
-## Data Dictionary
-The system maintains data integrity across three primary entities to ensure accurate auditing.
+---
 
-### 1. Master Supply Data (`shortage_report.csv`)
-| Column Name | Data Type | Description |
-| :--- | :--- | :--- |
-| **Part_ID** | String | Unique identifier for the component (Primary Key). |
-| **Subsystem** | String | The technical category (e.g., Battery, Chassis) used for stakeholder routing. |
-| **On_Hand_Qty** | Integer | Current inventory level available in the local warehouse. |
-| **Safety_Stock** | Integer | Minimum threshold required before a critical alert is triggered. |
 
-### 2. Master Demand Data (`build_plan.csv`)
-| Column Name | Data Type | Description |
-| :--- | :--- | :--- |
-| **Option_Code** | String | The specific vehicle configuration impacted by a shortage. |
-| **Build_Week** | Date/String | The scheduled production week used to calculate impact urgency. |
-| **Target_Qty** | Integer | Number of vehicles scheduled for production in the specified week. |
+## Key Features
 
-### 3. Processed Risk Data (`risk_ledger.csv`)
-| Column Name | Data Type | Description |
-| :--- | :--- | :--- |
-| **Risk_Score** | Float | Calculated value (0.0 - 1.0) based on delay vs. inventory buffer. |
-| **Status** | String | Categorical risk level (e.g., Critical, High Risk, Monitoring). |
-| **Assigned_POC** | String | Stakeholder retrieved from playbooks for recovery ownership. |
+### **1. Temporal Risk Modeling**
+Unlike static dashboards, this tool calculates a **Live Runout Date**. By intersecting your **Days on Hand (DOH)** with the supplier's **Revised ETA**, the system generates a "True Arrival Buffer".
+* **Critical Status:** Triggered if ETA is after the Runout Date.
+* **Warning Status:** Triggered if the safety buffer drops below a 2-day threshold.
+* **On Track Status:** Confirms the supply chain is healthy relative to the build plan.
+
+### **2. Matrix Organization Escalation**
+The system identifies the "Nature of the Disruption" and routes it according to organizational knowledge:
+* **Quality Issues:** Automatically routes to the Quality Lead for rework protocols.
+* **Commercial/Cost Issues:** Escalates to the Global Supply Manager (GSM) for expedite negotiations.
+* **Logistics/Timing:** Defaults to the NPI TPM to manage build schedule impact.
+
+### **3. Optimized Operational UI**
+The dashboard is built with **Streamlit** and optimized for high-density information display on mobile workstations (13-inch displays), utilizing expandable "drawers" to maintain focus on high-priority alerts.
 
 ---
 
-## Technical Stack
-* **Language**: Python 3.12 for core logic and agentic orchestration.
-* **Data Processing**: Pandas for high-performance relational joins and feature engineering.
-* **Interface**: Streamlit for an exception-based executive dashboard.
-* **Intelligence Layer**: Custom Agentic logic utilizing structured JSON schemas for deterministic results.
-* **Knowledge Management**: Markdown-based RAG-lite architecture for organizational playbooks.
+## 🛠️ Technical Stack
+* **Language:** Python 3.12
+* **Frontend:** Streamlit
+* **Intelligence:** Google Gemini 2.0 Flash API
+* **Data Handling:** SQL and Pandas for relational CSV/database lookups
+* **Resiliency:** Circuit-breaker patterns with Regex fallbacks for high-availability during API throttling.
 
 ---
 
-## Setup & Deployment
+## 🔧 Installation & Setup
 
-### 1. Environment Configuration
-Create and activate a virtual environment to manage dependencies:
+1. **Clone the Repository:**
+   ```bash
+   git clone [https://github.com/aparnayalamanchi/NPI-Control-Tower.git](https://github.com/aparnayalamanchi/NPI-Control-Tower.git)
+   cd NPI-Control-Tower
 
+2.Set Up Environment:
+Create a .env file and add your Gemini API Key:
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+    GEMINI_API_KEY=your_api_key_here
 ```
-### 2. Install Requirements
-Install necessary libraries for data manipulation and the user interface:
-
+3. Initialize the System:
+Run the project initializer to generate the local master data (Build Plans, Org Knowledge, and Shortage Reports):
 ```bash
-pip install streamlit pandas
+python initialize_project.py
 ```
-3. System Initialization
-Run the initialization script to generate the local relational datasets and knowledge base:
-
-```bash
-python3 initialize_project.py
-```
-4. Run the Control Tower
-Launch the dashboard to begin automated risk assessment:
-
+4. Launch the Dashboard:
 ```bash
 streamlit run app.py
 ```
