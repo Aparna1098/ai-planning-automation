@@ -1,76 +1,93 @@
 import streamlit as st
 import pandas as pd
-import json
-from constants import RISK_LEDGER_PATH
+from datetime import datetime, timedelta
+import os
 
-# --- AGENT 1: PARSER ---
-def parser_agent(email_text):
-    # Simulated LLM logic: Extracting data into JSON
-    # In reality, this would be: response = openai_client.chat(...)
-    simulated_json = '{"part_id": "PART-002", "new_eta": "2026-02-28", "status": "delayed"}'
-    data = json.loads(simulated_json)
-    data["raw_text"] = email_text
-    return data
+# Import your custom agents
+from parser_agent import parser_agent
+from auditor_agent import auditor_agent
+from mitigation_agent import mitigation_agent
+from drafting_agent import drafting_agent
 
-# --- AGENT 2: AUDITOR ---
-def auditor_agent(parsed_data):
-    shortage_df = pd.read_csv("shortage_report.csv")
-    build_df = pd.read_csv("build_plan.csv")
-    
-    part_id = parsed_data['part_id']
-    if part_id not in shortage_df['Part_ID'].values: return None
-    
-    part_info = shortage_df[shortage_df['Part_ID'] == part_id].iloc[0]
-    impact_mask = build_df['Option_Code'] == part_info['Option_Code']
-    impacted_build = build_df[impact_mask].iloc[0]
-    
-    inventory = part_info['OH_Inventory']
-    demand = impacted_build['Target_Qty']
-    coverage = inventory / demand if demand > 0 else 1.0
-    
-    return {
-        "Part_ID": part_id,
-        "Status": "CRITICAL" if inventory == 0 else "WARNING",
-        "Risk_Score": round(1.0 - coverage, 2),
-        "Impacted_Option": part_info['Option_Code'],
-        "Build_Week": impacted_build['Build_Week'],
-        "System": part_info['System'],
-        "Subsystem": part_info['Subsystem'],
-        "Inventory_Coverage": f"{round(coverage * 100)}%"
-    }
+# --- PAGE CONFIG & BALANCED CSS ---
+st.set_page_config(page_title="NPI Agentic Control Tower", layout="wide")
 
-# --- AGENT 3: MITIGATION ---
-def mitigation_agent(audit_row):
-    kb_df = pd.read_csv("org_knowledge.csv")
-    match = kb_df[kb_df['Subsystem'] == audit_row['Subsystem']]
+st.markdown("""
+    <style>
+    /* Increased padding to prevent clipping of the date and title */
+    .block-container {padding-top: 2.5rem; padding-bottom: 0rem;}
     
-    poc = match.iloc[0]['POC'] if not match.empty else "GSM"
-    action = match.iloc[0]['Standard_Protocol'] if not match.empty else "Review vendor status."
+    /* Header styling with specific margin to drop the date down */
+    .stMarkdown div p { margin-top: 5px; }
     
-    draft = f"Hi {poc},\n\nDelay detected for {audit_row['Part_ID']}. Impacts {audit_row['Build_Week']}. Protocol: {action}"
-    return {"POC": poc, "Action": action, "Draft": draft}
-
-# --- STREAMLIT UI ---
-st.set_page_config(page_title="NPI Control Tower", layout="wide")
-st.title("🚢 NPI Agentic Control Tower")
-
-email_input = st.text_area("Paste Supplier Email Here:", "Part PART-002 is delayed due to weather.")
-
-if st.button("Run Agentic Audit"):
-    # Step 1: Parse
-    signal = parser_agent(email_input)
-    # Step 2: Audit
-    result = auditor_agent(signal)
+    /* Title spacing */
+    .main-title {font-size: 26px; font-weight: bold; margin-bottom: 10px;}
     
-    if result:
-        st.subheader("Relational Audit Result")
-        st.write(pd.DataFrame([result]))
+    /* Compact input area remains the same */
+    .stTextArea textarea {height: 90px !important;}
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- HEADER SECTION ---
+col_t, col_date = st.columns([3.5, 1.5])
+with col_t:
+    # Using a div with a class for custom margin control
+    st.markdown('<div class="main-title">Material Planning Assistant</div>', unsafe_allow_html=True)
+with col_date:
+    st.write(f"**System Date:**\nMonday, Feb 09, 2026")
+
+# --- INPUT SECTION ---
+email_input = st.text_area("Paste Supplier Email:", label_visibility="collapsed")
+exec_btn = st.button("Execute Audit Pipeline", use_container_width=True)
+
+if exec_btn and email_input:
+    with st.spinner("Analyzing..."):
+        # Agent Pipeline execution
+        extracted = parser_agent(email_input)
+        audit = auditor_agent(extracted)
         
-        # Step 3: Mitigate
-        plan = mitigation_agent(result)
-        st.subheader("Recommended Mitigation Plan")
-        st.success(f"**Assigned POC:** {plan['POC']}")
-        st.info(f"**Action:** {plan['Action']}")
-        st.text_area("Communication Draft:", plan['Draft'], height=150)
-    else:
-        st.error("Part ID not found in Master Data.")
+        if audit:
+            mitigation = mitigation_agent(audit, email_input)
+            
+            # --- PRIMARY RESULTS GRID ---
+            c1, c2, c3 = st.columns([1.5, 2.5, 2])
+            
+            with c1:
+                # Dynamic Status Badge
+                colors = {"CRITICAL": "#ff4b4b", "WARNING": "#ffa500", "ON TRACK": "#28a745"}
+                bg = colors.get(audit["Status"], "#808080")
+                st.markdown(f'<div style="background:{bg}; color:white; padding:12px; border-radius:8px; text-align:center; font-weight:bold; font-size:18px;">{audit["Status"]}</div>', unsafe_allow_html=True)
+            
+            with c2:
+                # Core risk metrics display
+                st.markdown(f"**Part:** {audit['Part_ID']} | **Runout:** `{audit['Runout_Date']}`")
+                st.markdown(f"**Buffer:** `{audit['Arrival_Buffer']}`")
+            
+            with c3:
+                # Stakeholder assignment
+                st.markdown(f"👤 **{mitigation['POC']}**")
+                st.caption(f"{mitigation['Target_Role']}")
+
+            st.divider()
+
+            # --- DRAWERS ---
+            with st.expander("Relational Audit Summary", expanded=True):
+                st.table(pd.DataFrame([audit]))
+            
+            with st.expander("AI Communication Draft"):
+                with st.spinner("Generating..."):
+                    draft = drafting_agent(audit, mitigation)
+                st.code(draft, language="text")
+
+            col_sub1, col_sub2 = st.columns(2)
+            with col_sub1:
+                with st.expander("📉 Shortage Report"):
+                    st.dataframe(pd.read_csv("shortage_report.csv"), hide_index=True)
+            with col_sub2:
+                with st.expander("📅 Build Plan"):
+                    st.dataframe(pd.read_csv("build_plan.csv"), hide_index=True)
+        else:
+            st.error("Technical Error: Part ID not recognized.")
+
+# Footer
+st.caption("v2.5.1 Balanced Layout for 13\" Display")
