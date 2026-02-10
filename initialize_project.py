@@ -1,39 +1,38 @@
 import pandas as pd
-from constants import SHORTAGE_REPORT_PATH, BUILD_PLAN_PATH, KNOWLEDGE_BASE_PATH
+import os
 
-def init_data():
-    # 1. Master Supply Data (Shortage Report)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def initialize_system():
+    # 1. Shortage Report & 2. Build Plan remain standard...
     shortage_data = {
-        "Part_ID": [f"PART-{i:03}" for i in range(1, 11)],
-        "System": ["Powertrain", "Chassis", "Battery", "Body", "Interior"] * 2,
-        "Subsystem": ["Inverter", "Suspension", "Cells", "Stamping", "Seats"] * 2,
-        "Option_Code": ["P85", "C1", "B_LR", "S1", "I_PREM"] * 2,
-        "OH_Inventory": [10, 0, 5, 100, 20, 50, 0, 15, 0, 5]
+        "Part_ID": ["PART-001", "PART-002", "PART-003"],
+        "System": ["Energy", "Sensing", "Computing"],
+        "Subsystem": ["Battery", "Front Axle", "Cooling Loop"],
+        "OH_Inventory": [45, 0, 120],  
+        "Option_Code": ["P1", "C2", "T1"]
     }
-    pd.DataFrame(shortage_data).to_csv(SHORTAGE_REPORT_PATH, index=False)
-
-    # 2. Master Demand Data (Build Plan)
-    build_data = {
-        "Option_Code": ["P85", "C1", "B_LR", "S1", "I_PREM"],
-        "Build_Week": ["2026-W05", "2026-W05", "2026-W06", "2026-W07", "2026-W05"],
-        "Target_Qty": [50, 20, 100, 40, 60]
-    }
-    pd.DataFrame(build_data).to_csv(BUILD_PLAN_PATH, index=False)
-
-    # 3. Org Knowledge Base (for Mitigation Agent)
+    
+    # 3. Expanded Org Knowledge (Matrix Organization)
+    # We now map multiple roles to each Subsystem
     kb_data = {
-        "Subsystem": ["Inverter", "Suspension", "Cells", "Stamping", "Seats"],
-        "POC": ["Alice (Power)", "Bob (Chassis)", "Charlie (Battery)", "Dana (Body)", "Eve (Interior)"],
+        "Subsystem": ["Battery", "Battery", "Battery", "Front Axle", "Front Axle", "Front Axle"],
+        "Role": ["NPI TPM", "GSM", "Quality", "NPI TPM", "GSM", "Quality"],
+        "Name": ["Sarah Miller", "David Smith", "Alice Wong", "James Chen", "Robert Glass", "Lee Zhang"],
         "Standard_Protocol": [
-            "Request secondary component source.",
-            "Verify casting machine uptime.",
-            "Review thermal safety clearance.",
-            "Confirm stamping tool availability.",
-            "Expedite freight for fabric materials."
+            "Manage build schedule impact and line trials.",
+            "Negotiate expedite fees and commercial recovery.",
+            "Review supplier quality deviation requests.",
+            "Verify alternative part numbers in PLM.",
+            "Execute spot-buy for raw material shortages.",
+            "Perform incoming inspection for reworked units."
         ]
     }
-    pd.DataFrame(kb_data).to_csv(KNOWLEDGE_BASE_PATH, index=False)
-    print("System Data Initialized Successfully.")
+
+    pd.DataFrame(shortage_data).to_csv(os.path.join(BASE_DIR, "shortage_report.csv"), index=False)
+    pd.DataFrame(kb_data).to_csv(os.path.join(BASE_DIR, "org_knowledge.csv"), index=False)
+    
+    print(f"✅ Matrix Organization Initialized at: {BASE_DIR}")
 
 if __name__ == "__main__":
-    init_data()
+    initialize_system()
